@@ -1,0 +1,28 @@
+services:
+  token-updater:
+    build: .
+    image: ghcr.io/genz27/flow2api-token-updater:latest
+    container_name: flow2api-token-updater
+    ports:
+      - "8080:8080"
+      - "6080:6080"
+      - "5900:5900"
+    volumes:
+      - ./profiles:/app/profiles
+      - ./data:/app/data
+      - ./logs:/app/logs
+    environment:
+      # 管理员密码 (Web UI)
+      - ADMIN_PASSWORD=${ADMIN_PASSWORD:-admin123}
+      # 外部 API Key (供其他服务调用)
+      - API_KEY=${API_KEY:-}
+      # Flow2API 配置
+      - FLOW2API_URL=${FLOW2API_URL:-http://host.docker.internal:8000}
+      - CONNECTION_TOKEN=${CONNECTION_TOKEN:-}
+      - REFRESH_INTERVAL=${REFRESH_INTERVAL:-60}
+      # VNC
+      - VNC_PASSWORD=${VNC_PASSWORD:-flow2api}
+      - RESOLUTION=1280x720x24
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    restart: unless-stopped

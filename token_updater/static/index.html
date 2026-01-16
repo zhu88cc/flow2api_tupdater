@@ -1,0 +1,202 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Token Updater</title>
+    <style>
+        :root {
+            --bg: #09090b;
+            --card: #18181b;
+            --border: #27272a;
+            --text: #fafafa;
+            --muted: #a1a1aa;
+            --primary: #2563eb;
+            --primary-hover: #1d4ed8;
+            --success: #22c55e;
+            --warning: #f59e0b;
+            --danger: #ef4444;
+            --radius: 8px;
+        }
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: var(--bg); color: var(--text); min-height: 100vh; }
+        .container { max-width: 1200px; margin: 0 auto; padding: 24px; }
+        
+        /* Login */
+        .login-wrap { display: flex; justify-content: center; align-items: center; min-height: 100vh; }
+        .login-card { background: var(--card); border: 1px solid var(--border); border-radius: 12px; padding: 32px; width: 100%; max-width: 380px; }
+        .login-card h1 { font-size: 24px; font-weight: 600; margin-bottom: 24px; text-align: center; }
+</style>
+</head>
+<body>
+<div id="login-page" class="login-wrap">
+    <div class="login-card">
+        <h1>🔐 Token Updater</h1>
+        <div class="form-group">
+            <label>密码</label>
+            <input type="password" id="login-password" placeholder="管理员密码" onkeypress="if(event.key==='Enter')doLogin()">
+        </div>
+        <button class="btn btn-primary btn-block" onclick="doLogin()">登录</button>
+    </div>
+</div>
+<div id="main-page" class="container hidden"></div>
+<div class="modal" id="profile-modal"><div class="modal-content"></div></div>
+<script>const API='';let token=localStorage.getItem('t')||'';</script>
+</body>
+</html>
+
+<style>
+        /* Form */
+        .form-group { margin-bottom: 16px; }
+        .form-group label { display: block; font-size: 14px; color: var(--muted); margin-bottom: 6px; }
+        .form-group input, .form-group select { width: 100%; padding: 10px 12px; background: var(--bg); border: 1px solid var(--border); border-radius: var(--radius); color: var(--text); font-size: 14px; }
+        .form-group input:focus { outline: none; border-color: var(--primary); }
+        
+        /* Buttons */
+        .btn { padding: 10px 16px; border: none; border-radius: var(--radius); cursor: pointer; font-size: 14px; font-weight: 500; transition: all 0.15s; }
+        .btn-primary { background: var(--primary); color: white; }
+        .btn-primary:hover { background: var(--primary-hover); }
+        .btn-success { background: var(--success); color: white; }
+        .btn-warning { background: var(--warning); color: black; }
+        .btn-danger { background: var(--danger); color: white; }
+        .btn-ghost { background: transparent; border: 1px solid var(--border); color: var(--text); }
+        .btn-ghost:hover { background: var(--card); }
+        .btn-sm { padding: 6px 12px; font-size: 13px; }
+        .btn-block { width: 100%; }
+        
+        /* Header */
+        .header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 32px; }
+        .header h1 { font-size: 24px; font-weight: 600; }
+        .header-actions { display: flex; gap: 12px; }
+        
+        /* Stats Grid */
+        .stats { display: grid; grid-template-columns: repeat(4, 1fr); gap: 16px; margin-bottom: 32px; }
+        @media (max-width: 768px) { .stats { grid-template-columns: repeat(2, 1fr); } }
+        .stat-card { background: var(--card); border: 1px solid var(--border); border-radius: var(--radius); padding: 20px; }
+        .stat-card .label { font-size: 13px; color: var(--muted); margin-bottom: 4px; }
+        .stat-card .value { font-size: 32px; font-weight: 600; }
+        .stat-card .value.green { color: var(--success); }
+        .stat-card .value.yellow { color: var(--warning); }
+        
+        /* Card */
+        .card { background: var(--card); border: 1px solid var(--border); border-radius: var(--radius); margin-bottom: 24px; }
+        .card-header { display: flex; justify-content: space-between; align-items: center; padding: 16px 20px; border-bottom: 1px solid var(--border); }
+        .card-header h2 { font-size: 16px; font-weight: 600; }
+        .card-body { padding: 20px; }
+        
+        /* Profile List */
+        .profile-grid { display: grid; gap: 12px; }
+        .profile-item { display: flex; align-items: center; justify-content: space-between; padding: 16px; background: var(--bg); border: 1px solid var(--border); border-radius: var(--radius); }
+        .profile-item.active { border-color: var(--primary); }
+        .profile-info { flex: 1; }
+        .profile-name { font-weight: 600; font-size: 15px; }
+        .profile-meta { font-size: 13px; color: var(--muted); margin-top: 4px; }
+        .profile-badges { display: flex; gap: 6px; margin-top: 8px; flex-wrap: wrap; }
+        .badge { padding: 3px 8px; border-radius: 4px; font-size: 11px; font-weight: 500; }
+        .badge-green { background: rgba(34,197,94,0.15); color: var(--success); }
+        .badge-yellow { background: rgba(245,158,11,0.15); color: var(--warning); }
+        .badge-blue { background: rgba(37,99,235,0.15); color: var(--primary); }
+        .badge-red { background: rgba(239,68,68,0.15); color: var(--danger); }
+        .profile-actions { display: flex; gap: 8px; }
+        
+        /* Modal */
+        .modal { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.8); justify-content: center; align-items: center; z-index: 100; }
+        .modal.show { display: flex; }
+        .modal-content { background: var(--card); border: 1px solid var(--border); border-radius: 12px; padding: 24px; width: 90%; max-width: 480px; }
+        .modal-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; }
+        .modal-header h3 { font-size: 18px; font-weight: 600; }
+        .modal-close { background: none; border: none; color: var(--muted); font-size: 24px; cursor: pointer; }
+        .modal-footer { display: flex; gap: 12px; justify-content: flex-end; margin-top: 24px; }
+        
+        /* Toast */
+        .toast { position: fixed; bottom: 24px; right: 24px; padding: 12px 20px; border-radius: var(--radius); color: white; font-size: 14px; z-index: 200; animation: slideIn 0.2s; }
+        .toast.success { background: var(--success); }
+        .toast.error { background: var(--danger); }
+        @keyframes slideIn { from { transform: translateX(100%); opacity: 0; } to { transform: translateX(0); opacity: 1; } }
+        
+        .hidden { display: none !important; }
+        .empty { text-align: center; padding: 48px; color: var(--muted); }
+        .config-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; }
+        @media (max-width: 768px) { .config-grid { grid-template-columns: 1fr; } }
+    </style>
+
+<script>
+function getVncUrl(){return`http://${location.hostname}:6080/vnc.html`}
+async function init(){
+    const r=await fetch(`${API}/api/auth/check`).then(r=>r.json());
+    if(!r.need_password){showMain();load();return}
+    if(token){try{const s=await fetch(`${API}/api/status`,{headers:{Authorization:`Bearer ${token}`}});if(s.ok){showMain();load();return}}catch(e){}}
+    showLogin();
+}
+function showLogin(){document.getElementById('login-page').classList.remove('hidden');document.getElementById('main-page').classList.add('hidden')}
+function showMain(){document.getElementById('login-page').classList.add('hidden');document.getElementById('main-page').classList.remove('hidden');renderMain()}
+async function doLogin(){
+    const p=document.getElementById('login-password').value;
+    if(!p){toast('请输入密码','error');return}
+    try{const r=await fetch(`${API}/api/login`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({password:p})}).then(r=>r.json());
+    if(r.success){token=r.token;localStorage.setItem('t',token);showMain();load();toast('登录成功','success')}else{toast(r.detail||'密码错误','error')}}catch(e){toast('登录失败','error')}
+}
+async function doLogout(){try{await fetch(`${API}/api/logout`,{method:'POST',headers:{Authorization:`Bearer ${token}`}})}catch(e){}token='';localStorage.removeItem('t');showLogin()}
+async function api(url,opt={}){const h={Authorization:`Bearer ${token}`,...opt.headers};const r=await fetch(url,{...opt,headers:h});if(r.status===401){token='';localStorage.removeItem('t');showLogin();throw new Error('expired')}return r}
+function renderMain(){
+    document.getElementById('main-page').innerHTML=`
+    <div class="header"><h1>Token Updater</h1><div class="header-actions"><a href="${getVncUrl()}" target="_blank" class="btn btn-ghost">🖥️ VNC</a><button class="btn btn-ghost" onclick="doLogout()">退出</button></div></div>
+    <div class="stats"><div class="stat-card"><div class="label">Profile</div><div class="value" id="s-total">0</div></div><div class="stat-card"><div class="label">已登录</div><div class="value green" id="s-login">0</div></div><div class="stat-card"><div class="label">同步成功</div><div class="value green" id="s-sync">0</div></div><div class="stat-card"><div class="label">失败</div><div class="value yellow" id="s-err">0</div></div></div>
+    <div class="card"><div class="card-header"><h2>⚙️ 配置</h2><button class="btn btn-primary btn-sm" onclick="saveConfig()">保存</button></div><div class="card-body"><div class="config-grid"><div class="form-group"><label>Flow2API 地址</label><input id="c-url"></div><div class="form-group"><label>连接 Token</label><input type="password" id="c-token"></div><div class="form-group"><label>刷新间隔(分钟)</label><input type="number" id="c-int"></div></div></div></div>
+    <div class="card"><div class="card-header"><h2>👤 Profiles</h2><div style="display:flex;gap:8px"><button class="btn btn-success btn-sm" onclick="syncAll()">🔄 同步全部</button><button class="btn btn-primary btn-sm" onclick="showModal()">+ 新建</button></div></div><div class="card-body"><div class="profile-grid" id="profiles"></div></div></div>`;
+}
+async function load(){
+    try{
+        const st=await api(`${API}/api/status`).then(r=>r.json());
+        document.getElementById('s-total').textContent=st.profiles.total;
+        document.getElementById('s-login').textContent=st.profiles.logged_in;
+        document.getElementById('s-sync').textContent=st.syncer.total_sync_count;
+        document.getElementById('s-err').textContent=st.syncer.total_error_count;
+        const cfg=await api(`${API}/api/config`).then(r=>r.json());
+        document.getElementById('c-url').value=cfg.flow2api_url||'';
+        document.getElementById('c-int').value=cfg.refresh_interval||60;
+        if(cfg.connection_token_preview)document.getElementById('c-token').placeholder=cfg.connection_token_preview;
+        const ps=await api(`${API}/api/profiles`).then(r=>r.json());
+        renderProfiles(ps);
+    }catch(e){if(e.message!=='expired')console.error(e)}
+}
+function renderProfiles(ps){
+    const el=document.getElementById('profiles');
+    if(!ps.length){el.innerHTML='<div class="empty">暂无 Profile<br><button class="btn btn-primary" style="margin-top:16px" onclick="showModal()">创建</button></div>';return}
+    el.innerHTML=ps.map(p=>`<div class="profile-item ${p.is_browser_active?'active':''}">
+        <div class="profile-info"><div class="profile-name">${p.name}</div><div class="profile-meta">${p.email||'未登录'}${p.proxy_url?' · 🌐 '+p.proxy_url:''}${p.last_sync_time?' · '+new Date(p.last_sync_time).toLocaleString():''}</div>
+        <div class="profile-badges">${p.is_logged_in?'<span class="badge badge-green">已登录</span>':'<span class="badge badge-yellow">未登录</span>'}${p.is_active?'<span class="badge badge-blue">启用</span>':'<span class="badge badge-red">禁用</span>'}${p.is_browser_active?'<span class="badge badge-green">运行中</span>':''}${p.sync_count?`<span class="badge badge-blue">${p.sync_count}次</span>`:''}</div></div>
+        <div class="profile-actions"><button class="btn btn-ghost btn-sm" onclick="checkLogin(${p.id})" title="刷新状态">🔍</button><button class="btn btn-ghost btn-sm" onclick="editProfile(${p.id})">✏️</button><button class="btn btn-primary btn-sm" onclick="launchBrowser(${p.id})">🖥️</button><button class="btn btn-warning btn-sm" onclick="syncProfile(${p.id})">🔄</button><button class="btn btn-danger btn-sm" onclick="delProfile(${p.id},'${p.name}')">🗑️</button></div></div>`).join('');
+}
+async function checkLogin(id){toast('检测中...','success');const r=await api(`${API}/api/profiles/${id}/check-login`,{method:'POST'}).then(r=>r.json());toast(r.is_logged_in?'已登录':'未登录',r.is_logged_in?'success':'error');load()}
+async function saveConfig(){
+    const b={};const u=document.getElementById('c-url').value;const t=document.getElementById('c-token').value;const i=document.getElementById('c-int').value;
+    if(u)b.flow2api_url=u;if(t)b.connection_token=t;if(i)b.refresh_interval=parseInt(i);
+    await api(`${API}/api/config`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(b)});toast('已保存','success');
+}
+let editId=null;
+function showModal(id=null){
+    editId=id;
+    document.getElementById('profile-modal').classList.add('show');
+    document.querySelector('.modal-content').innerHTML=`<div class="modal-header"><h3>${id?'编辑':'新建'} Profile</h3><button class="modal-close" onclick="hideModal()">×</button></div>
+    <div class="form-group"><label>名称</label><input id="m-name"></div><div class="form-group"><label>备注</label><input id="m-remark"></div><div class="form-group"><label>代理 (可选)</label><input id="m-proxy" placeholder="http://user:pass@host:port"></div>
+    <div class="modal-footer"><button class="btn btn-ghost" onclick="hideModal()">取消</button><button class="btn btn-primary" onclick="saveProfile()">${id?'保存':'创建'}</button></div>`;
+    if(id)loadProfile(id);
+}
+async function loadProfile(id){const p=await api(`${API}/api/profiles/${id}`).then(r=>r.json());document.getElementById('m-name').value=p.name||'';document.getElementById('m-remark').value=p.remark||'';document.getElementById('m-proxy').value=p.proxy_url||''}
+function hideModal(){document.getElementById('profile-modal').classList.remove('show');editId=null}
+async function saveProfile(){
+    const n=document.getElementById('m-name').value.trim();const r=document.getElementById('m-remark').value.trim();const px=document.getElementById('m-proxy').value.trim();
+    if(!n){toast('请输入名称','error');return}
+    if(editId){await api(`${API}/api/profiles/${editId}`,{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify({name:n,remark:r,proxy_url:px,proxy_enabled:px?true:false})})}
+    else{await api(`${API}/api/profiles`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({name:n,remark:r,proxy_url:px})})}
+    hideModal();load();toast(editId?'已保存':'已创建','success');
+}
+function editProfile(id){showModal(id)}
+async function launchBrowser(id){toast('启动中...','success');await api(`${API}/api/profiles/${id}/launch`,{method:'POST'});load();window.open(getVncUrl(),'_blank')}
+async function syncProfile(id){toast('同步中...','success');const r=await api(`${API}/api/profiles/${id}/sync`,{method:'POST'}).then(r=>r.json());toast(r.success?'同步成功':r.error||'失败',r.success?'success':'error');load()}
+async function syncAll(){toast('同步全部...','success');const r=await api(`${API}/api/sync-all`,{method:'POST'}).then(r=>r.json());toast(`完成: ${r.success_count}成功, ${r.error_count}失败`,'success');load()}
+async function delProfile(id,n){if(!confirm(`删除 "${n}"?`))return;await api(`${API}/api/profiles/${id}`,{method:'DELETE'});toast('已删除','success');load()}
+function toast(m,t='success'){const e=document.createElement('div');e.className=`toast ${t}`;e.textContent=m;document.body.appendChild(e);setTimeout(()=>e.remove(),3000)}
+init();setInterval(()=>{if(!document.getElementById('main-page').classList.contains('hidden'))load()},15000);
+</script>
