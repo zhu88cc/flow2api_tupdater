@@ -1,6 +1,8 @@
-"""Token Updater API - 含外部 API"""
+﻿"""Token Updater API - 含外部 API"""
 import secrets
-from fastapi import FastAPI, HTTPException, Depends, Header
+import time
+from apscheduler.triggers.interval import IntervalTrigger
+from fastapi import FastAPI, HTTPException, Depends, Header, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import HTMLResponse, FileResponse
 from pydantic import BaseModel
@@ -14,15 +16,67 @@ from .logger import logger
 
 app = FastAPI(title="Flow2API Token Updater", version="2.1.0")
 
+cors_origins = config.cors_origins
+cors_allow_credentials = config.cors_allow_credentials
+if "*" in cors_origins and cors_allow_credentials:
+    cors_allow_credentials = False
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
-    allow_credentials=True,
+    allow_origins=cors_origins,
+    allow_credentials=cors_allow_credentials,
     allow_methods=["*"],
     allow_headers=["*"],
 )
 
-active_sessions = set()
+active_sessions: dict[str, float] = {}
+
+MAX_PROFILE_NAME_LEN = 64
+MAX_REMARK_LEN = 200
+MAX_PROXY_LEN = 512
+
+
+def _session_ttl_seconds() -> int:
+    ttl_minutes = config.session_ttl_minutes
+    if ttl_minutes <= 0:
+        return 0
+    return max(60, ttl_minutes * 60)
+
+
+def _prune_sessions(now: float | None = None) -> None:
+    if now is None:
+        now = time.time()
+    expired = [token for token, exp in active_sessions.items() if exp and exp <= now]
+    for token in expired:
+        active_sessions.pop(token, None)
+
+
+def _validate_profile_name(name: str) -> str:
+    clean = name.strip()
+    if not clean:
+        raise HTTPException(status_code=400, detail="名称不能为空")
+    if len(clean) > MAX_PROFILE_NAME_LEN:
+        raise HTTPException(status_code=400, detail="名称过长")
+    return clean
+
+
+def _validate_remark(remark: str) -> str:
+    clean = remark.strip()
+    if len(clean) > MAX_REMARK_LEN:
+        raise HTTPException(status_code=400, detail="备注过长")
+    return clean
+
+
+def _validate_proxy(proxy_url: str) -> str:
+    clean = proxy_url.strip()
+    if not clean:
+        return ""
+    if len(clean) > MAX_PROXY_LEN:
+        raise HTTPException(status_code=400, detail="代理地址过长")
+    valid, msg = validate_proxy_format(clean)
+    if not valid:
+        raise HTTPException(status_code=400, detail=f"代理格式错误: {msg}")
+    return clean
 
 
 # ========== Models ==========
@@ -55,7 +109,13 @@ async def verify_session(authorization: str = Header(None)):
     if not authorization or not authorization.startswith("Bearer "):
         raise HTTPException(status_code=401, detail="未登录")
     token = authorization[7:]
-    if token not in active_sessions:
+    now = time.time()
+    _prune_sessions(now)
+    expiry = active_sessions.get(token)
+    if expiry is None:
+        raise HTTPException(status_code=401, detail="登录已过期")
+    if expiry and expiry <= now:
+        active_sessions.pop(token, None)
         raise HTTPException(status_code=401, detail="登录已过期")
     return token
 
@@ -64,7 +124,7 @@ async def verify_api_key(x_api_key: str = Header(None)):
     """验证外部 API Key"""
     if not config.api_key:
         raise HTTPException(status_code=500, detail="未配置 API_KEY")
-    if x_api_key != config.api_key:
+    if not x_api_key or not secrets.compare_digest(x_api_key, config.api_key):
         raise HTTPException(status_code=401, detail="Invalid API Key")
     return x_api_key
 
@@ -73,17 +133,19 @@ async def verify_api_key(x_api_key: str = Header(None)):
 async def login(request: LoginRequest):
     if not config.admin_password:
         raise HTTPException(status_code=500, detail="未设置 ADMIN_PASSWORD")
-    if request.password != config.admin_password:
+    if not secrets.compare_digest(request.password, config.admin_password):
         raise HTTPException(status_code=401, detail="密码错误")
-    
+
     session_token = secrets.token_urlsafe(32)
-    active_sessions.add(session_token)
+    ttl_seconds = _session_ttl_seconds()
+    expiry = time.time() + ttl_seconds if ttl_seconds else 0
+    active_sessions[session_token] = expiry
     return {"success": True, "token": session_token}
 
 
 @app.post("/api/logout")
 async def logout(token: str = Depends(verify_session)):
-    active_sessions.discard(token)
+    active_sessions.pop(token, None)
     return {"success": True}
 
 
@@ -127,10 +189,10 @@ async def get_status(token: str = Depends(verify_session)):
 async def get_profiles(token: str = Depends(verify_session)):
     profiles = await profile_db.get_all_profiles()
     active_id = browser_manager.get_active_profile_id()
-    
+
     for p in profiles:
         p["is_browser_active"] = (p["id"] == active_id)
-        
+
         # 如果浏览器正在运行，实时检测登录状态
         if p["id"] == active_id and browser_manager._active_context:
             try:
@@ -139,29 +201,28 @@ async def get_profiles(token: str = Depends(verify_session)):
                 if is_logged_in != bool(p.get("is_logged_in")):
                     await profile_db.update_profile(p["id"], is_logged_in=int(is_logged_in))
                     p["is_logged_in"] = int(is_logged_in)
-            except:
+            except Exception:
                 pass
-        
+
         # 验证代理格式
         if p.get("proxy_url"):
             valid, msg = validate_proxy_format(p["proxy_url"])
             p["proxy_status"] = msg
-    
+            p["proxy_valid"] = bool(valid)
+
     return profiles
 
 
 @app.post("/api/profiles")
 async def create_profile(request: CreateProfileRequest, token: str = Depends(verify_session)):
-    if await profile_db.get_profile_by_name(request.name):
+    name = _validate_profile_name(request.name)
+    remark = _validate_remark(request.remark or "")
+    proxy_url = _validate_proxy(request.proxy_url or "")
+
+    if await profile_db.get_profile_by_name(name):
         raise HTTPException(status_code=400, detail="名称已存在")
-    
-    # 验证代理格式
-    if request.proxy_url:
-        valid, msg = validate_proxy_format(request.proxy_url)
-        if not valid:
-            raise HTTPException(status_code=400, detail=f"代理格式错误: {msg}")
-    
-    profile_id = await profile_db.add_profile(request.name, request.remark, request.proxy_url)
+
+    profile_id = await profile_db.add_profile(name, remark, proxy_url)
     return {"success": True, "profile_id": profile_id}
 
 
@@ -179,25 +240,23 @@ async def update_profile(profile_id: int, request: UpdateProfileRequest, token: 
     profile = await profile_db.get_profile(profile_id)
     if not profile:
         raise HTTPException(status_code=404, detail="不存在")
-    
-    # 验证代理格式
-    if request.proxy_url:
-        valid, msg = validate_proxy_format(request.proxy_url)
-        if not valid:
-            raise HTTPException(status_code=400, detail=f"代理格式错误: {msg}")
-    
+
     update_data = {}
     if request.name is not None:
-        update_data["name"] = request.name
+        new_name = _validate_profile_name(request.name)
+        existing = await profile_db.get_profile_by_name(new_name)
+        if existing and existing.get("id") != profile_id:
+            raise HTTPException(status_code=400, detail="名称已存在")
+        update_data["name"] = new_name
     if request.remark is not None:
-        update_data["remark"] = request.remark
+        update_data["remark"] = _validate_remark(request.remark)
     if request.is_active is not None:
         update_data["is_active"] = int(request.is_active)
     if request.proxy_url is not None:
-        update_data["proxy_url"] = request.proxy_url
+        update_data["proxy_url"] = _validate_proxy(request.proxy_url)
     if request.proxy_enabled is not None:
         update_data["proxy_enabled"] = int(request.proxy_enabled)
-    
+
     if update_data:
         await profile_db.update_profile(profile_id, **update_data)
     return {"success": True}
@@ -208,7 +267,7 @@ async def delete_profile(profile_id: int, token: str = Depends(verify_session)):
     profile = await profile_db.get_profile(profile_id)
     if not profile:
         raise HTTPException(status_code=404, detail="不存在")
-    
+
     await browser_manager.close_browser(profile_id)
     await browser_manager.delete_profile_data(profile_id)
     await profile_db.delete_profile(profile_id)
@@ -255,7 +314,7 @@ async def check_login_status(profile_id: int, token: str = Depends(verify_sessio
     profile = await profile_db.get_profile(profile_id)
     if not profile:
         raise HTTPException(status_code=404, detail="不存在")
-    
+
     # 如果浏览器正在运行，从当前 context 检查
     if browser_manager.get_active_profile_id() == profile_id and browser_manager._active_context:
         try:
@@ -263,13 +322,13 @@ async def check_login_status(profile_id: int, token: str = Depends(verify_sessio
             is_logged_in = any(c["name"] == config.session_cookie_name for c in cookies)
             await profile_db.update_profile(profile_id, is_logged_in=int(is_logged_in))
             return {"success": True, "is_logged_in": is_logged_in, "source": "active_browser"}
-        except:
+        except Exception:
             pass
-    
+
     # 否则启动浏览器快速检查
     token_found = await browser_manager.extract_token(profile_id)
     is_logged_in = token_found is not None
-    
+
     return {"success": True, "is_logged_in": is_logged_in, "source": "extracted"}
 
 
@@ -316,13 +375,37 @@ async def get_config(token: str = Depends(verify_session)):
 
 
 @app.post("/api/config")
-async def update_config(request: UpdateConfigRequest, token: str = Depends(verify_session)):
-    if request.flow2api_url:
-        config.flow2api_url = request.flow2api_url
-    if request.connection_token:
-        config.connection_token = request.connection_token
-    if request.refresh_interval:
+async def update_config(request: UpdateConfigRequest, api_request: Request, token: str = Depends(verify_session)):
+    old_refresh_interval = config.refresh_interval
+    updated = False
+
+    if request.flow2api_url is not None:
+        value = request.flow2api_url.strip()
+        if not value:
+            raise HTTPException(status_code=400, detail="Flow2API 地址不能为空")
+        config.flow2api_url = value
+        updated = True
+    if request.connection_token is not None:
+        config.connection_token = request.connection_token.strip()
+        updated = True
+    if request.refresh_interval is not None:
+        if request.refresh_interval < 1 or request.refresh_interval > 1440:
+            raise HTTPException(status_code=400, detail="刷新间隔需在 1-1440 分钟之间")
         config.refresh_interval = request.refresh_interval
+        updated = True
+
+    if updated:
+        config.save()
+
+    if request.refresh_interval is not None and config.refresh_interval != old_refresh_interval:
+        scheduler = getattr(api_request.app.state, "scheduler", None)
+        job_id = getattr(api_request.app.state, "sync_job_id", "token_sync")
+        if scheduler:
+            try:
+                scheduler.reschedule_job(job_id, trigger=IntervalTrigger(minutes=config.refresh_interval))
+            except Exception as exc:
+                logger.warning(f"更新定时任务失败: {exc}")
+
     return {"success": True}
 
 
@@ -350,30 +433,30 @@ async def ext_list_profiles(api_key: str = Depends(verify_api_key)):
 async def ext_get_token(profile_id: int, api_key: str = Depends(verify_api_key)):
     """
     外部 API: 获取指定 Profile 的 Session Token
-    
+
     会启动浏览器提取最新 token，然后返回
     """
     profile = await profile_db.get_profile(profile_id)
     if not profile:
         raise HTTPException(status_code=404, detail="Profile not found")
-    
+
     if not profile.get("is_active"):
         raise HTTPException(status_code=400, detail="Profile is disabled")
-    
+
     logger.info(f"[API] 请求 Profile {profile['name']} 的 Token")
-    
+
     # 提取 token
-    token = await browser_manager.extract_token(profile_id)
-    
-    if not token:
+    token_value = await browser_manager.extract_token(profile_id)
+
+    if not token_value:
         raise HTTPException(status_code=400, detail="Failed to extract token, please login first")
-    
+
     return {
         "success": True,
         "profile_id": profile_id,
         "profile_name": profile["name"],
         "email": profile.get("email"),
-        "session_token": token
+        "session_token": token_value
     }
 
 
@@ -383,7 +466,7 @@ async def ext_sync_profile(profile_id: int, api_key: str = Depends(verify_api_ke
     profile = await profile_db.get_profile(profile_id)
     if not profile:
         raise HTTPException(status_code=404, detail="Profile not found")
-    
+
     logger.info(f"[API] 同步 Profile {profile['name']}")
     return await token_syncer.sync_profile(profile_id)
 
@@ -394,7 +477,7 @@ async def ext_get_token_by_name(name: str, api_key: str = Depends(verify_api_key
     profile = await profile_db.get_profile_by_name(name)
     if not profile:
         raise HTTPException(status_code=404, detail="Profile not found")
-    
+
     return await ext_get_token(profile["id"], api_key)
 
 
@@ -403,10 +486,10 @@ async def ext_get_token_by_email(email: str, api_key: str = Depends(verify_api_k
     """外部 API: 通过邮箱获取 Token"""
     profiles = await profile_db.get_all_profiles()
     profile = next((p for p in profiles if p.get("email") == email), None)
-    
+
     if not profile:
         raise HTTPException(status_code=404, detail="Profile not found")
-    
+
     return await ext_get_token(profile["id"], api_key)
 
 

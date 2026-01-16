@@ -1,4 +1,4 @@
-"""Token Updater 主入口 - 多 Profile 版"""
+﻿"""Token Updater 主入口 - 多 Profile 版"""
 import asyncio
 import uvicorn
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
@@ -12,23 +12,24 @@ from .logger import logger
 
 
 scheduler = AsyncIOScheduler()
+SYNC_JOB_ID = "token_sync"
 
 
 async def scheduled_sync():
     """定时同步任务"""
     logger.info("=== 定时同步任务触发 ===")
-    
+
     # 检查是否配置了 connection_token
     if not config.connection_token:
         logger.warning("未配置 CONNECTION_TOKEN，跳过本次同步")
         return
-    
+
     # 检查是否有已登录的 profile
     profiles = await profile_db.get_logged_in_profiles()
     if not profiles:
         logger.warning("没有已登录的 Profile，跳过本次同步")
         return
-    
+
     # 执行批量同步
     await token_syncer.sync_all_profiles()
 
@@ -38,23 +39,26 @@ async def startup():
     logger.info("=" * 60)
     logger.info("Flow2API Token Updater v2.0 - 多 Profile 版")
     logger.info("=" * 60)
-    
+
     # 初始化数据库
     await profile_db.init()
     logger.info("数据库初始化完成")
-    
+
     # 启动浏览器管理器
     await browser_manager.start()
-    
+
     # 配置定时任务
     scheduler.add_job(
         scheduled_sync,
         trigger=IntervalTrigger(minutes=config.refresh_interval),
-        id="token_sync",
+        id=SYNC_JOB_ID,
         replace_existing=True
     )
     scheduler.start()
-    
+
+    app.state.scheduler = scheduler
+    app.state.sync_job_id = SYNC_JOB_ID
+
     logger.info(f"定时任务已启动: 每 {config.refresh_interval} 分钟执行一次")
     logger.info(f"Flow2API URL: {config.flow2api_url}")
     logger.info(f"API 端口: {config.api_port}")
@@ -67,7 +71,8 @@ async def startup():
 async def shutdown():
     """关闭时清理"""
     logger.info("正在关闭...")
-    scheduler.shutdown()
+    if scheduler.running:
+        scheduler.shutdown()
     await browser_manager.stop()
 
 

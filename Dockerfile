@@ -1,4 +1,4 @@
-# Flow2API Token Updater v2.0 - 多 Profile 管理
+﻿# Flow2API Token Updater v2.0 - 多 Profile 管理
 # Docker + noVNC + Playwright
 
 FROM python:3.11-slim-bookworm
@@ -53,9 +53,8 @@ RUN apt-get update && apt-get install -y \
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
-# 安装 Playwright (只安装 chromium，不运行 install-deps)
-RUN pip install playwright==1.40.0 \
-    && playwright install chromium
+# 安装 Playwright Chromium
+RUN playwright install chromium
 
 # 复制应用代码
 COPY token_updater/ /app/token_updater/

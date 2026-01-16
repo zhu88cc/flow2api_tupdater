@@ -1,4 +1,4 @@
-# Flow2API Token Updater v2.0
+﻿# Flow2API Token Updater v2.0
 
 多 Profile 管理版 - Docker + noVNC + Playwright
 
@@ -30,6 +30,7 @@ cd ~/token-updater/flow2api && git pull && cd docker-vnc && docker compose down 
 |------|----------|--------|------|
 | 管理界面 | `ADMIN_PASSWORD` | `admin123` | Web 管理界面登录密码 |
 | VNC | `VNC_PASSWORD` | `flow2api` | noVNC 远程桌面密码 |
+| 外部 API | `API_KEY` | 空 | 调用 `/v1/*` 接口的 API Key |
 
 修改密码：编辑 `.env` 文件或 `docker-compose.yml`
 
@@ -49,7 +50,9 @@ EOF
 |------|------|
 | 8080 | Web 管理界面 |
 | 6080 | noVNC 远程桌面 |
-| 5900 | VNC 端口 (可选) |
+| 5900 | VNC 端口 (默认仅本机绑定，需手动放开) |
+
+> 如需暴露 5900，请修改 `docker-compose.yml` 的端口映射。
 
 ## 使用流程
 
@@ -76,12 +79,16 @@ POST /api/profiles/{id}/sync    # 同步 Token
 POST /api/sync-all              # 同步全部
 ```
 
+## 配置持久化
+
+Web UI 修改的 `FLOW2API_URL`、`CONNECTION_TOKEN`、`REFRESH_INTERVAL` 会写入 `CONFIG_FILE` (默认 `/app/data/config.json`) 并在重启后加载。
+
 ## 目录结构
 
 ```
 docker-vnc/
 ├── profiles/     # 浏览器数据 (持久化)
-├── data/         # SQLite 数据库
+├── data/         # SQLite 数据库 + config.json
 ├── logs/         # 日志
 └── docker-compose.yml
 ```
@@ -91,3 +98,4 @@ docker-vnc/
 1. 修改默认密码 `ADMIN_PASSWORD` 和 `VNC_PASSWORD`
 2. 使用防火墙限制 6080/8080 端口访问
 3. 建议配合 Nginx 反向代理 + HTTPS
+4. 若不使用外部 API，保持 `API_KEY` 为空并避免暴露 `/v1/*`

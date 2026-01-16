@@ -1,4 +1,4 @@
-services:
+﻿services:
   token-updater:
     build: .
     image: ghcr.io/genz27/flow2api-token-updater:latest
@@ -6,7 +6,7 @@ services:
     ports:
       - "8080:8080"
       - "6080:6080"
-      - "5900:5900"
+      - "127.0.0.1:5900:5900"
     volumes:
       - ./profiles:/app/profiles
       - ./data:/app/data
@@ -20,6 +20,11 @@ services:
       - FLOW2API_URL=${FLOW2API_URL:-http://host.docker.internal:8000}
       - CONNECTION_TOKEN=${CONNECTION_TOKEN:-}
       - REFRESH_INTERVAL=${REFRESH_INTERVAL:-60}
+      # 会话与 CORS
+      - SESSION_TTL_MINUTES=${SESSION_TTL_MINUTES:-1440}
+      - CORS_ORIGINS=${CORS_ORIGINS:-}
+      - CORS_ALLOW_CREDENTIALS=${CORS_ALLOW_CREDENTIALS:-false}
+      - CONFIG_FILE=${CONFIG_FILE:-/app/data/config.json}
       # VNC
       - VNC_PASSWORD=${VNC_PASSWORD:-flow2api}
       - RESOLUTION=1280x720x24

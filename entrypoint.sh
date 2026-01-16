@@ -1,4 +1,4 @@
-#!/bin/bash
+﻿#!/bin/bash
 set -e
 
 echo "=========================================="
@@ -8,7 +8,11 @@ echo "=========================================="
 echo ""
 echo "管理界面: http://localhost:8080"
 echo "noVNC:    http://localhost:${NOVNC_PORT:-6080}/vnc.html"
-echo "VNC 密码: ${VNC_PASSWORD:-flow2api}"
+if [ "${VNC_PASSWORD:-}" = "flow2api" ]; then
+  echo "VNC 密码: 使用默认值，请尽快修改"
+else
+  echo "VNC 密码: 已设置"
+fi
 echo ""
 echo "=========================================="
 
