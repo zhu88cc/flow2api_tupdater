@@ -135,7 +135,7 @@ def _build_config() -> Config:
         connection_token=connection_token,
         refresh_interval=refresh_interval,
         headless=_parse_bool(_get_env("HEADLESS"), default=False),
-        api_port=_parse_int(_get_env("API_PORT"), 8080),
+        api_port=_parse_int(_get_env("API_PORT"), 8002),
         session_ttl_minutes=_parse_int(_get_env("SESSION_TTL_MINUTES"), 1440),
         cors_origins=_parse_origins(_get_env("CORS_ORIGINS")),
         cors_allow_credentials=_parse_bool(_get_env("CORS_ALLOW_CREDENTIALS"), default=False),

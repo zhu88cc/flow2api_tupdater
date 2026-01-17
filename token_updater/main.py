@@ -63,7 +63,7 @@ async def startup():
     logger.info(f"Flow2API URL: {config.flow2api_url}")
     logger.info(f"API 端口: {config.api_port}")
     logger.info("")
-    logger.info("管理界面: http://localhost:8080")
+    logger.info("管理界面: http://localhost:8002")
     logger.info("VNC 界面: http://localhost:6080/vnc.html")
     logger.info("")
 

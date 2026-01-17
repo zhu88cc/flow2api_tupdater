@@ -68,7 +68,7 @@ RUN mkdir -p /app/profiles /app/logs /app/data
 RUN chmod +x /app/entrypoint.sh
 
 # 端口
-EXPOSE 6080 5900 8080
+EXPOSE 6080 5900 8002
 
 # 持久化
 VOLUME ["/app/profiles", "/app/logs", "/app/data"]

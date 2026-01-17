@@ -4,7 +4,7 @@
     image: ghcr.io/genz27/flow2api-token-updater:latest
     container_name: flow2api-token-updater
     ports:
-      - "8002:8080"
+      - "8002:8002"
       - "6080:6080"
       - "127.0.0.1:5900:5900"
     volumes:
