@@ -16,7 +16,7 @@
 git clone https://github.com/genz27/flow2api_tupdater.git && cd flow2api_tupdater && docker compose up -d --build
 ```
 
-部署后访问: `http://你的IP:8080`
+部署后访问: `http://你的IP:8002`
 
 ## 更新升级
 
@@ -48,7 +48,7 @@ EOF
 
 | 端口 | 用途 |
 |------|------|
-| 8080 | Web 管理界面 |
+| 8002 | Web 管理界面 |
 | 6080 | noVNC 远程桌面 |
 | 5900 | VNC 端口 (默认仅本机绑定，需手动放开) |
 
@@ -56,7 +56,7 @@ EOF
 
 ## 使用流程
 
-1. 访问 `http://你的IP:8080` 登录管理界面
+1. 访问 `http://你的IP:8002` 登录管理界面
 2. 点击「新建 Profile」创建账号
 3. 点击「登录」按钮，在 VNC 中完成 Google 登录
 4. 点击「同步」将 Token 推送到 Flow2API
@@ -96,6 +96,6 @@ docker-vnc/
 ## 安全建议
 
 1. 修改默认密码 `ADMIN_PASSWORD` 和 `VNC_PASSWORD`
-2. 使用防火墙限制 6080/8080 端口访问
+2. 使用防火墙限制 6080/8002 端口访问
 3. 建议配合 Nginx 反向代理 + HTTPS
 4. 若不使用外部 API，保持 `API_KEY` 为空并避免暴露 `/v1/*`

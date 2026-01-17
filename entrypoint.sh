@@ -6,7 +6,7 @@ echo "Flow2API Token Updater v2.0"
 echo "多 Profile 管理版"
 echo "=========================================="
 echo ""
-echo "管理界面: http://localhost:8080"
+echo "管理界面: http://localhost:8002"
 echo "noVNC:    http://localhost:${NOVNC_PORT:-6080}/vnc.html"
 if [ "${VNC_PASSWORD:-}" = "flow2api" ]; then
   echo "VNC 密码: 使用默认值，请尽快修改"
