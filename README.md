@@ -22,7 +22,8 @@ cp .env.example .env
 # 编辑 .env 设置 ADMIN_PASSWORD 等
 
 # 启动
-docker-compose up -d
+docker compose up -d
+
 ```
 
 访问 http://localhost:8002 进入管理界面。

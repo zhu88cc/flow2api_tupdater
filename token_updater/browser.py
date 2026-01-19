@@ -72,6 +72,18 @@ class BrowserManager:
         """获取 Profile 持久化目录"""
         return os.path.join(os.path.abspath(config.profiles_dir), f"profile_{profile_id}")
 
+    def _clean_locks(self, profile_dir: str):
+        """清理 Chromium 锁文件"""
+        lock_files = ["SingletonLock", "SingletonCookie", "SingletonSocket"]
+        for lock in lock_files:
+            lock_path = os.path.join(profile_dir, lock)
+            if os.path.exists(lock_path):
+                try:
+                    os.remove(lock_path)
+                    logger.info(f"已清理锁文件: {lock}")
+                except Exception:
+                    pass
+
     def _mask_token(self, token: str) -> str:
         if not token or len(token) <= 8:
             return token or ""
@@ -103,6 +115,7 @@ class BrowserManager:
 
                 profile_dir = self._get_profile_dir(profile_id)
                 os.makedirs(profile_dir, exist_ok=True)
+                self._clean_locks(profile_dir)  # 清理锁文件
                 proxy = await self._get_proxy(profile)
 
                 # 非 headless，用于 VNC 登录
@@ -177,6 +190,8 @@ class BrowserManager:
                 if not self._playwright:
                     await self.start()
 
+                profile_dir = self._get_profile_dir(profile_id)
+                self._clean_locks(profile_dir)  # 清理锁文件
                 proxy = await self._get_proxy(profile)
 
                 logger.info(f"[{profile['name']}] Headless 模式提取 Token...")
